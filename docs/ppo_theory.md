@@ -151,6 +151,9 @@ $$
 = \mathbb{E}_{\tau \sim \pi_\theta} \left[ \nabla_\theta \log P(\tau; \theta) \cdot G(\tau) \right]
 $$
 
+我：任何以概率 $P$ 为权重的求和，本质上就是该项内容的数学期望 (Expectation)。 
+$$\sum_{x \in \mathcal{X}} P(x) \cdot f(x) = \mathbb{E}_{x \sim P} \left[ f(x) \right]$$
+
 ### 4.3 轨迹概率的分解
 
 一条轨迹的概率为：
@@ -213,7 +216,15 @@ $$
 $$
 
 这就是 **log-softmax**，PyTorch 中直接有 `F.log_softmax(logits, dim=-1)`，梯度简洁稳定。
+我：似乎log好处不仅如此，置换带来了额外的p(x)，使得可以p(x)+累加===>E x~p,第二，一条轨迹的概率为：
 
+
+
+$$
+P(\tau; \theta) = P(s_0) \prod_{t=0}^{T} \pi_\theta(a_t \mid s_t) \cdot P(s_{t+1} \mid s_t, a_t)
+$$
+
+,log可以把连乘变为连加，具体见4.3
 ### 5.2 π 在哪里
 
 整理内容 a 中问"$\pi_\theta(a|s)$ 在哪"。答案是：它藏在 ratio $r_t(\theta)$ 里：
