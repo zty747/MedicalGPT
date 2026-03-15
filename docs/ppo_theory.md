@@ -71,7 +71,9 @@ $$
 - $\mathbb{E}[\cdot]$：数学期望符号，表示对所有可能轨迹取平均
 - $\tau \sim \pi_\theta$：轨迹 $\tau$ 是按照当前策略 $\pi_\theta$ 采样出来的（即让 Actor 自由生成）
 - $J(\theta)$：策略的"总分"，我们希望通过调整 $\theta$ 让它尽可能大
-我:直观上是要让分高的路径概率尽量大（由于是概率采样rollout）
+
+> 我：直观上是要让分高的路径概率尽量大（由于是概率采样 rollout）
+
 ---
 
 ## 3. 蒙特卡洛采样：如何把期望变成可算的数
@@ -151,8 +153,11 @@ $$
 = \mathbb{E}_{\tau \sim \pi_\theta} \left[ \nabla_\theta \log P(\tau; \theta) \cdot G(\tau) \right]
 $$
 
-我：任何以概率 $P$ 为权重的求和，本质上就是该项内容的数学期望 (Expectation)。 
-$$\sum_{x \in \mathcal{X}} P(x) \cdot f(x) = \mathbb{E}_{x \sim P} \left[ f(x) \right]$$
+> 我：任何以概率 $P$ 为权重的求和，本质上就是该项内容的数学期望 (Expectation)。
+
+$$
+\sum_{x \in \mathcal{X}} P(x) \cdot f(x) = \mathbb{E}_{x \sim P} \left[ f(x) \right]
+$$
 
 ### 4.3 轨迹概率的分解
 
@@ -170,7 +175,7 @@ $$
 取对数（乘积变求和）：
 
 $$
-\log P(\tau; \theta) = \underbrace{\log P(s_0)}_{\text{与}\theta\text{无关}} + \sum_{t=0}^{T} \log \pi_\theta(a_t \mid s_t) + \underbrace{\sum_{t=0}^{T} \log P(s_{t+1} \mid s_t, a_t)}_{\text{与}\theta\text{无关}}
+\log P(\tau; \theta) = \underbrace{\log P(s_0)}_{\text{与 }\theta\text{ 无关}} + \sum_{t=0}^{T} \log \pi_\theta(a_t \mid s_t) + \underbrace{\sum_{t=0}^{T} \log P(s_{t+1} \mid s_t, a_t)}_{\text{与 }\theta\text{ 无关}}
 $$
 
 对 $\theta$ 求梯度，与 $\theta$ 无关的项消失：
@@ -216,15 +221,11 @@ $$
 $$
 
 这就是 **log-softmax**，PyTorch 中直接有 `F.log_softmax(logits, dim=-1)`，梯度简洁稳定。
-我：似乎log好处不仅如此，置换带来了额外的p(x)，使得可以p(x)+累加===>E x~p,第二，一条轨迹的概率为：
 
+> 我：似乎 log 的好处不仅如此：第一，置换带来了额外的 $P(x)$，使得 $P(x) \cdot \text{累加} \Rightarrow \mathbb{E}_{x \sim P}$（即求和变期望）；第二，一条轨迹的概率
+> $$P(\tau; \theta) = P(s_0) \prod_{t=0}^{T} \pi_\theta(a_t \mid s_t) \cdot P(s_{t+1} \mid s_t, a_t)$$
+> 经过 log 可以把连乘变为连加，具体见 4.3。
 
-
-$$
-P(\tau; \theta) = P(s_0) \prod_{t=0}^{T} \pi_\theta(a_t \mid s_t) \cdot P(s_{t+1} \mid s_t, a_t)
-$$
-
-,log可以把连乘变为连加，具体见4.3
 ### 5.2 π 在哪里
 
 整理内容 a 中问"$\pi_\theta(a|s)$ 在哪"。答案是：它藏在 ratio $r_t(\theta)$ 里：
@@ -357,6 +358,40 @@ for t in reversed(range(response_length)):
 普通策略梯度每次 rollout 只能用一次（on-policy），样本利用率低。PPO 想用同一批数据更新多次（`ppo_epochs` 轮），但如果新旧策略差距太大，训练会不稳定。
 
 **Clip 机制**：限制新旧策略之比 $r_t(\theta)$ 的范围，保证新策略不会偏离旧策略太远。
+
+#### 8.1.1 为什么普通策略梯度每次 rollout 只能用一次
+
+回顾第 4.4 节的策略梯度定理：
+
+$$
+\nabla_\theta J(\theta) = \mathbb{E}_{\tau \sim \pi_\theta} \left[ \sum_{t=0}^{T} \nabla_\theta \log \pi_\theta(a_t \mid s_t) \cdot G_t \right]
+$$
+
+关键在于期望符号下的下标：$\mathbb{E}_{\tau \sim \pi_\theta}$，它明确要求**轨迹 $\tau$ 必须从当前参数 $\theta$ 所对应的策略 $\pi_\theta$ 中采样**。
+
+**一次梯度更新后发生了什么？**
+
+1. **Rollout 阶段**：用当前参数 $\theta$ 让 Actor 生成轨迹 $\tau^{(1)}, \tau^{(2)}, \ldots$，此时 $\tau^{(i)} \sim \pi_\theta$，分布完全吻合。
+2. **第一次梯度更新**：用这批轨迹计算梯度并更新：$\theta' = \theta + \alpha \nabla_\theta J(\theta)$。参数从 $\theta$ 变成了 $\theta'$，对应的策略也从 $\pi_\theta$ 变成了 $\pi_{\theta'}$。
+3. **第二次使用同一批数据的问题**：原来的轨迹是从 $\pi_\theta$ 采样的，但现在要估计的是 $\mathbb{E}_{\tau \sim \pi_{\theta'}}[\cdot]$。数据分布（$\pi_\theta$）与当前策略（$\pi_{\theta'}$）**不再匹配**。用错误分布下的数据来估计梯度，得到的是**有偏估计（Biased Estimator）**，可能导致训练不稳定甚至崩溃。
+
+这就是"on-policy"约束的数学本质：**期望中的采样分布必须与正在被优化的策略严格一致**，每次参数更新后分布就已改变，旧数据立即失效。
+
+**PPO 如何解决——重要性采样（Importance Sampling）**
+
+重要性采样的核心恒等式：
+
+$$
+\mathbb{E}_{\tau \sim \pi_{\theta_\text{new}}} \left[ f(\tau) \right]
+= \mathbb{E}_{\tau \sim \pi_{\theta_\text{old}}} \left[ \frac{\pi_{\theta_\text{new}}(a \mid s)}{\pi_{\theta_\text{old}}(a \mid s)} \cdot f(\tau) \right]
+$$
+
+通过在期望内乘以比值 $r_t(\theta) = \dfrac{\pi_{\theta_\text{new}}(a_t \mid s_t)}{\pi_{\theta_\text{old}}(a_t \mid s_t)}$，可以用**旧策略采集的数据**来无偏地估计**新策略下的期望**。
+
+- 当 $r_t \approx 1$（新旧策略接近）时，修正有效，可以安全地多轮使用同一批数据；
+- 当 $r_t$ 偏离 1 过多时，重要性采样的方差爆炸，估计不再可靠。
+
+这正是 PPO 引入 **Clip** 的原因：把 $r_t(\theta)$ 限制在 $[1-\epsilon, 1+\epsilon]$ 范围内，保证每轮参数更新后新旧策略差距不超过阈值，从而让同一批 rollout 数据可以安全地用 `ppo_epochs` 轮。
 
 ### 8.2 ratio 的定义
 
