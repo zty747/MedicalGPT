@@ -393,6 +393,30 @@ $$
 
 这正是 PPO 引入 **Clip** 的原因：把 $r_t(\theta)$ 限制在 $[1-\epsilon, 1+\epsilon]$ 范围内，保证每轮参数更新后新旧策略差距不超过阈值，从而让同一批 rollout 数据可以安全地用 `ppo_epochs` 轮。
 
+**PPO 两阶段执行流程**
+
+对同一个 Prompt，只进行一次耗时的"采样（生成回答）"，然后把这个生成的回答固定下来。在随后的多次 PPO 迭代中，不生成任何新词，而是仅仅用更新中的模型对这句固定的回答做极其快速的"前向传播"，计算出新的 logprobs，从而完成多次梯度更新。具体可拆解为严谨的两个阶段：
+
+**阶段一：数据收集 Rollout（每个 Prompt 只做 1 次，极其耗时）**
+
+1. **采样生成（Sampling）**：把 Prompt 输入给旧模型 $\theta_{\text{old}}$。模型开始**自回归（Autoregressive）**地生成回答，即一个 Token 一个 Token 地顺序生成。这是整个强化学习流程中最慢、最耗算力的一步。
+2. **记录旧概率**：在生成每个 Token 的同时，记录下旧模型生成该 Token 的概率，即 $\pi_{\text{old}}(a_t \mid s_t)$。
+3. **计算优势**：把生成的完整回答送给 Reward 模型打分，结合 Critic 模型算出这条回答的 Advantage $\hat{A}$。
+4. **存入经验池**：把这一整套数据 $\bigl(\text{Prompt},\ \text{生成的回答},\ \pi_{\text{old}},\ \hat{A}\bigr)$ 打包，放进一个 Buffer（缓冲区）里。
+
+**阶段二：策略更新 PPO Epochs（对 Buffer 里的同一批数据做多次，例如 4 次）**
+
+接下来，用 Buffer 里的旧数据去更新新模型 $\theta_{\text{new}}$：
+
+1. **取出固定数据**：从 Buffer 中取出 $\bigl(\text{Prompt},\ \text{生成的回答}\bigr)$。
+2. **只算概率，不生成新词（并行前向传播）**：把 Prompt 和已经生成好的回答拼接在一起，整体输入给正在更新的新模型 $\theta_{\text{new}}$。由于整句话的 Token 序列已经是已知的（类似于预训练时的 Teacher Forcing），模型无需自回归地逐词采样，而是像预训练（Pre-training）阶段一样，高度并行化地一次性进行 Forward Pass，瞬间算出新模型对这句"既定台词"中每个 Token 的输出概率，即 $\pi_{\theta_{\text{new}}}(a_t \mid s_t)$。这个速度极快，与自回归采样相比开销可以忽略不计。
+3. **计算重要性比值**：用新的 logprobs 除以 Buffer 里存着的旧 logprobs，得到：
+   $$\rho_t = \frac{\pi_{\theta_{\text{new}}}(a_t \mid s_t)}{\pi_{\text{old}}(a_t \mid s_t)}$$
+4. **反向传播**：结合 $\hat{A}$ 计算 Clip 损失，求出梯度，更新 $\theta_{\text{new}}$ 的参数。
+5. **循环复用**：重复步骤 1–4 若干次（即 `ppo_epochs` 轮）。每次循环时，$\theta_{\text{new}}$ 都会稍微变化，算出来的 $\pi_{\theta_{\text{new}}}$ 也随之改变，但文本序列始终是阶段一最初采样得到的那一个。
+
+这一设计正是 PPO 高效性的核心：**昂贵的自回归采样只做一次，廉价的并行前向传播复用多次**，在保证训练稳定性（依赖 Clip 机制）的前提下大幅提升了样本利用率。
+
 ### 8.2 ratio 的定义
 
 $$
