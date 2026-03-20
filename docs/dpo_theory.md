@@ -87,7 +87,7 @@ $$
 
 $$
 \boxed{
-P\!\left(y_w \succ y_l \mid x\right) = \sigma\!\left(r^*(x, y_w) - r^*(x, y_l)\right) = \frac{1}{1 + e^{-(r^*(x, y_w) - r^*(x, y_l))}}
+P\left(y_w \succ y_l \mid x\right) = \sigma\left(r^*(x, y_w) - r^*(x, y_l)\right) = \frac{1}{1 + e^{-(r^*(x, y_w) - r^*(x, y_l))}}
 }
 $$
 
@@ -104,7 +104,7 @@ $$
 在经典 RLHF 的第二阶段，需要先用偏好数据训练一个参数化的奖励模型 $r_\phi(x, y)$，最小化负对数似然：
 
 $$
-\mathcal{L}_\text{RM}(\phi) = -\mathbb{E}_{(x, y_w, y_l) \sim \mathcal{D}} \left[ \log \sigma\!\left(r_\phi(x, y_w) - r_\phi(x, y_l)\right) \right]
+\mathcal{L}_{\text{RM}}(\phi) = -\mathbb{E}_{(x, y_w, y_l) \sim \mathcal{D}} \left[ \log \sigma\left(r_\phi(x, y_w) - r_\phi(x, y_l)\right) \right]
 $$
 
 > **DPO 的关键突破**：跳过这一步，直接从偏好数据中优化策略，避免了独立训练 RM 的额外开销和误差传播。
@@ -119,7 +119,7 @@ RLHF 的核心优化问题是：**在让模型回答尽可能获得高奖励的�
 
 $$
 \boxed{
-\max_{\pi_\theta} \mathbb{E}_{x \sim \mathcal{D},\, y \sim \pi_\theta(\cdot \mid x)} \left[ r(x, y) \right] - \beta\, D_{\mathrm{KL}}\!\left[\pi_\theta(\cdot \mid x) \,\|\, \pi_\text{ref}(\cdot \mid x)\right]
+\max_{\pi_\theta} \mathbb{E}_{x \sim \mathcal{D},\, y \sim \pi_\theta(\cdot \mid x)} \left[ r(x, y) \right] - \beta\, D_{\mathrm{KL}}\left[\pi_\theta(\cdot \mid x) \,\|\, \pi_{\text{ref}}(\cdot \mid x)\right]
 }
 $$
 
@@ -128,21 +128,21 @@ $$
 | 符号 | 含义 | 代码对应 |
 |------|------|---------|
 | $\pi_\theta(y \mid x)$ | **待优化策略（Policy）**：参数为 $\theta$ 的 LLM，给定 $x$ 生成 $y$ 的概率 | `model`（DPO 训练的目标模型） |
-| $\pi_\text{ref}(y \mid x)$ | **参考策略（Reference Policy）**：SFT 模型，参数固定，不参与梯度更新 | `ref_model`（冻结的 SFT 模型） |
+| $\pi_{\text{ref}}(y \mid x)$ | **参考策略（Reference Policy）**：SFT 模型，参数固定，不参与梯度更新 | `ref_model`（冻结的 SFT 模型） |
 | $r(x, y)$ | **奖励函数**：对完整响应 $y$ 的评分（PPO 中由 RM 提供，DPO 中隐式表示） | PPO：`reward_model(x, y)`；DPO：隐式 |
 | $\beta$ | **KL 惩罚系数**，$\beta > 0$，控制新策略偏离参考策略的程度 | `args.beta`（通常取 0.1～0.5） |
-| $D_{\mathrm{KL}}[\pi_\theta \| \pi_\text{ref}]$ | **KL 散度**，衡量两个分布的差异，$\ge 0$，等于 0 当且仅当两分布完全相同 | PPO 中显式计算并加入奖励；DPO 中隐式约束 |
+| $D_{\mathrm{KL}}[\pi_\theta \| \pi_{\text{ref}}]$ | **KL 散度**，衡量两个分布的差异，$\ge 0$，等于 0 当且仅当两分布完全相同 | PPO 中显式计算并加入奖励；DPO 中隐式约束 |
 
 ### 3.2 KL 散度的展开形式
 
 $$
-D_{\mathrm{KL}}\!\left[\pi_\theta \| \pi_\text{ref}\right] = \mathbb{E}_{y \sim \pi_\theta} \left[ \log \frac{\pi_\theta(y \mid x)}{\pi_\text{ref}(y \mid x)} \right]
+D_{\mathrm{KL}}\left[\pi_\theta \| \pi_{\text{ref}}\right] = \mathbb{E}_{y \sim \pi_\theta} \left[ \log \frac{\pi_\theta(y \mid x)}{\pi_{\text{ref}}(y \mid x)} \right]
 $$
 
 将目标函数完整展开：
 
 $$
-\max_{\pi_\theta} \mathbb{E}_{x,\, y \sim \pi_\theta} \left[ r(x, y) - \beta \log \frac{\pi_\theta(y \mid x)}{\pi_\text{ref}(y \mid x)} \right]
+\max_{\pi_\theta} \mathbb{E}_{x,\, y \sim \pi_\theta} \left[ r(x, y) - \beta \log \frac{\pi_\theta(y \mid x)}{\pi_{\text{ref}}(y \mid x)} \right]
 $$
 
 **与 PPO 的对比**：
@@ -170,13 +170,13 @@ rewards[t] = non_score_reward[t]        # 加入 GAE 计算
 
 $$
 \boxed{
-\pi^*(y \mid x) = \frac{1}{Z(x)}\, \pi_\text{ref}(y \mid x)\, \exp\!\left(\frac{r(x, y)}{\beta}\right)
+\pi^*(y \mid x) = \frac{1}{Z(x)}\, \pi_{\text{ref}}(y \mid x)\, \exp\left(\frac{r(x, y)}{\beta}\right)
 }
 $$
 
 **符号说明**：
 - $Z(x)$：**配分函数（Partition Function）**，归一化常数，使 $\sum_y \pi^*(y|x) = 1$
-$$Z(x) = \sum_{y} \pi_\text{ref}(y \mid x)\, \exp\!\left(\frac{r(x, y)}{\beta}\right)$$
+$$Z(x) = \sum_{y} \pi_{\text{ref}}(y \mid x)\, \exp\left(\frac{r(x, y)}{\beta}\right)$$
 - $\pi^*(y \mid x)$：最优策略，即对每个 $y$，以参考策略为基础，对高奖励回答指数级放大概率
 
 **推导过程**：
@@ -184,21 +184,23 @@ $$Z(x) = \sum_{y} \pi_\text{ref}(y \mid x)\, \exp\!\left(\frac{r(x, y)}{\beta}\r
 展开目标函数，将期望中的 $y \sim \pi_\theta$ 改写：
 
 $$
-\mathbb{E}_{y \sim \pi_\theta} \left[ r(x,y) - \beta \log \frac{\pi_\theta(y|x)}{\pi_\text{ref}(y|x)} \right]
-= -\beta \sum_y \pi_\theta(y|x) \log \frac{\pi_\theta(y|x)}{\pi_\text{ref}(y|x) \exp(r(x,y)/\beta)}
+\begin{aligned}
+&\mathbb{E}_{y \sim \pi_\theta} \left[ r(x,y) - \beta \log \frac{\pi_\theta(y|x)}{\pi_{\text{ref}}(y|x)} \right] \\[4pt]
+&= -\beta \sum_y \pi_\theta(y|x) \log \frac{\pi_\theta(y|x)}{\pi_{\text{ref}}(y|x) \exp(r(x,y)/\beta)}
+\end{aligned}
 $$
 
-注意到括号内正是 $\pi_\theta$ 相对于 $\pi_\text{ref}(y|x) \exp(r/\beta)$ 的 KL 散度（相差一个与 $\pi_\theta$ 无关的常数 $\beta \log Z(x)$）。
+注意到括号内正是 $\pi_\theta$ 相对于 $\pi_{\text{ref}}(y|x) \exp(r/\beta)$ 的 KL 散度（相差一个与 $\pi_\theta$ 无关的常数 $\beta \log Z(x)$）。
 
 **KL 散度非负**，当且仅当两个分布完全相同时取到最小值 0，因此目标函数在以下时取最大值：
 
 $$
-\pi_\theta(y|x) \propto \pi_\text{ref}(y|x) \exp\!\left(\frac{r(x,y)}{\beta}\right)
+\pi_\theta(y|x) \propto \pi_{\text{ref}}(y|x) \exp\left(\frac{r(x,y)}{\beta}\right)
 $$
 
 归一化后即得 $\pi^*$。
 
-> **直觉理解**：最优策略在参考策略 $\pi_\text{ref}$ 的基础上，对高奖励响应指数级"上调"概率，对低奖励响应"下调"概率，$\beta$ 控制调整的幅度——$\beta$ 越小，奖励信号越强，策略越激进地靠向高奖励区域；$\beta$ 越大，越保守地靠近参考策略。
+> **直觉理解**：最优策略在参考策略 $\pi_{\text{ref}}$ 的基础上，对高奖励响应指数级"上调"概率，对低奖励响应"下调"概率，$\beta$ 控制调整的幅度——$\beta$ 越小，奖励信号越强，策略越激进地靠向高奖励区域；$\beta$ 越大，越保守地靠近参考策略。
 
 **与 PPO 的对比**：PPO 没有这个解析解，它只能通过一步一步的梯度更新（Rollout → GAE → Clip）来**数值逼近**最优策略，而 DPO 直接给出了最优解的形式，并以此为基础构造损失函数。
 
@@ -207,13 +209,13 @@ $$
 从最优策略公式反解奖励函数：
 
 $$
-r(x, y) = \beta \log \frac{\pi^*(y \mid x)}{\pi_\text{ref}(y \mid x)} + \beta \log Z(x)
+r(x, y) = \beta \log \frac{\pi^*(y \mid x)}{\pi_{\text{ref}}(y \mid x)} + \beta \log Z(x)
 $$
 
-这一恒等式是 DPO 的**关键桥梁**：它把一个不可见的奖励函数 $r(x,y)$ 表达成了两个策略（目标策略 $\pi^*$ 和参考策略 $\pi_\text{ref}$）的对数比——这是可以计算的。
+这一恒等式是 DPO 的**关键桥梁**：它把一个不可见的奖励函数 $r(x,y)$ 表达成了两个策略（目标策略 $\pi^*$ 和参考策略 $\pi_{\text{ref}}$）的对数比——这是可以计算的。
 
 **符号解读**：
-- $\beta \log \frac{\pi^*(y|x)}{\pi_\text{ref}(y|x)}$：目标策略与参考策略的对数比，乘以 $\beta$，可以看作"隐式奖励"
+- $\beta \log \frac{\pi^*(y|x)}{\pi_{\text{ref}}(y|x)}$：目标策略与参考策略的对数比，乘以 $\beta$，可以看作"隐式奖励"
 - $\beta \log Z(x)$：只依赖于 $x$ 的常数，不依赖于 $y$，在偏好概率中会被消去
 
 ### 4.3 代入 Bradley-Terry 模型
@@ -221,13 +223,19 @@ $$
 将第 4.2 节的重参数化代入第 2.2 节的 Bradley-Terry 偏好概率：
 
 $$
-P(y_w \succ y_l \mid x) = \sigma\!\left(r(x, y_w) - r(x, y_l)\right)
+P(y_w \succ y_l \mid x) = \sigma\left(r(x, y_w) - r(x, y_l)\right)
 $$
 
 代入重参数化的 $r$：
 
 $$
-r(x, y_w) - r(x, y_l) = \beta \log \frac{\pi^*(y_w|x)}{\pi_\text{ref}(y_w|x)} + \cancel{\beta \log Z(x)} - \beta \log \frac{\pi^*(y_l|x)}{\pi_\text{ref}(y_l|x)} - \cancel{\beta \log Z(x)}
+\begin{aligned}
+r(x, y_w) - r(x, y_l)
+  &= \left[\beta \log \frac{\pi^*(y_w \mid x)}{\pi_{\text{ref}}(y_w \mid x)} + \beta \log Z(x)\right]
+   - \left[\beta \log \frac{\pi^*(y_l \mid x)}{\pi_{\text{ref}}(y_l \mid x)} + \beta \log Z(x)\right] \\[4pt]
+  &= \beta \log \frac{\pi^*(y_w \mid x)}{\pi_{\text{ref}}(y_w \mid x)}
+   - \beta \log \frac{\pi^*(y_l \mid x)}{\pi_{\text{ref}}(y_l \mid x)}
+\end{aligned}
 $$
 
 注意：$\beta \log Z(x)$ 在相减时**完全消去**，因为它只依赖于 $x$，与 $y$ 无关。
@@ -236,13 +244,13 @@ $$
 
 $$
 \boxed{
-P(y_w \succ y_l \mid x) = \sigma\!\left(\beta \log \frac{\pi_\theta(y_w \mid x)}{\pi_\text{ref}(y_w \mid x)} - \beta \log \frac{\pi_\theta(y_l \mid x)}{\pi_\text{ref}(y_l \mid x)}\right)
+P(y_w \succ y_l \mid x) = \sigma\left(\beta \log \frac{\pi_\theta(y_w \mid x)}{\pi_{\text{ref}}(y_w \mid x)} - \beta \log \frac{\pi_\theta(y_l \mid x)}{\pi_{\text{ref}}(y_l \mid x)}\right)
 }
 $$
 
 其中用 $\pi_\theta$ 替代了 $\pi^*$（因为我们要用 $\pi_\theta$ 来逼近 $\pi^*$）。
 
-> **这就是 DPO 最关键的一步**：偏好概率现在完全可以用两个语言模型（$\pi_\theta$ 和 $\pi_\text{ref}$）计算，**不再需要显式的奖励模型 $r(x,y)$**。配分函数 $Z(x)$ 的消去使得整个表达式不依赖于难以计算的归一化常数。
+> **这就是 DPO 最关键的一步**：偏好概率现在完全可以用两个语言模型（$\pi_\theta$ 和 $\pi_{\text{ref}}$）计算，**不再需要显式的奖励模型 $r(x,y)$**。配分函数 $Z(x)$ 的消去使得整个表达式不依赖于难以计算的归一化常数。
 
 ### 4.4 DPO 最终损失函数
 
@@ -250,10 +258,10 @@ $$
 
 $$
 \boxed{
-\mathcal{L}_\text{DPO}(\theta) = -\mathbb{E}_{(x, y_w, y_l) \sim \mathcal{D}} \left[
-  \log \sigma\!\left(
-    \underbrace{\beta \log \frac{\pi_\theta(y_w \mid x)}{\pi_\text{ref}(y_w \mid x)}}_{\text{chosen 的隐式奖励}} -
-    \underbrace{\beta \log \frac{\pi_\theta(y_l \mid x)}{\pi_\text{ref}(y_l \mid x)}}_{\text{rejected 的隐式奖励}}
+\mathcal{L}_{\text{DPO}}(\theta) = -\mathbb{E}_{(x, y_w, y_l) \sim \mathcal{D}} \left[
+  \log \sigma\left(
+    \underbrace{\beta \log \frac{\pi_\theta(y_w \mid x)}{\pi_{\text{ref}}(y_w \mid x)}}_{\text{chosen 的隐式奖励}} -
+    \underbrace{\beta \log \frac{\pi_\theta(y_l \mid x)}{\pi_{\text{ref}}(y_l \mid x)}}_{\text{rejected 的隐式奖励}}
   \right)
 \right]
 }
@@ -268,13 +276,13 @@ $$
 定义**隐式奖励（Implicit Reward）**：
 
 $$
-\hat{r}_\theta(x, y) \triangleq \beta \log \frac{\pi_\theta(y \mid x)}{\pi_\text{ref}(y \mid x)}
+\hat{r}_\theta(x, y) \triangleq \beta \log \frac{\pi_\theta(y \mid x)}{\pi_{\text{ref}}(y \mid x)}
 $$
 
 则 DPO 损失可以写成：
 
 $$
-\mathcal{L}_\text{DPO}(\theta) = -\mathbb{E} \left[ \log \sigma\!\left(\hat{r}_\theta(x, y_w) - \hat{r}_\theta(x, y_l)\right) \right]
+\mathcal{L}_{\text{DPO}}(\theta) = -\mathbb{E} \left[ \log \sigma\left(\hat{r}_\theta(x, y_w) - \hat{r}_\theta(x, y_l)\right) \right]
 $$
 
 **逐词解读**：
@@ -284,10 +292,10 @@ $$
 
 ### 5.2 梯度方向分析
 
-对 $\mathcal{L}_\text{DPO}(\theta)$ 关于 $\theta$ 求梯度（略去常数因子）：
+对 $\mathcal{L}_{\text{DPO}}(\theta)$ 关于 $\theta$ 求梯度（略去常数因子）：
 
 $$
-\nabla_\theta \mathcal{L}_\text{DPO} \propto -\underbrace{\sigma\!\left(\hat{r}_\theta(y_l) - \hat{r}_\theta(y_w)\right)}_{\text{权重：当前排序越"错"，权重越大}} \left[
+\nabla_\theta \mathcal{L}_{\text{DPO}} \propto -\underbrace{\sigma\left(\hat{r}_\theta(y_l) - \hat{r}_\theta(y_w)\right)}_{\text{权重：当前排序越"错"，权重越大}} \left[
   \underbrace{\beta \nabla_\theta \log \pi_\theta(y_w \mid x)}_{\text{提高 chosen 的对数概率}} -
   \underbrace{\beta \nabla_\theta \log \pi_\theta(y_l \mid x)}_{\text{降低 rejected 的对数概率}}
 \right]
@@ -339,12 +347,12 @@ loss = -F.logsigmoid(chosen_rewards - rejected_rewards).mean()
 
 ### 6.1 参考策略（Reference Policy）
 
-DPO 训练中保留了一个冻结的参考策略 $\pi_\text{ref}$，通常是 SFT 阶段得到的模型。
+DPO 训练中保留了一个冻结的参考策略 $\pi_{\text{ref}}$，通常是 SFT 阶段得到的模型。
 
-**$\pi_\text{ref}$ 的三重作用**：
+**$\pi_{\text{ref}}$ 的三重作用**：
 
 1. **数学锚点**：在推导中它提供了最优策略的解析形式，使配分函数可以被消去
-2. **隐式 KL 约束**：损失函数中的 $\log \frac{\pi_\theta}{\pi_\text{ref}}$ 项天然地惩罚 $\pi_\theta$ 偏离 $\pi_\text{ref}$ 过远
+2. **隐式 KL 约束**：损失函数中的 $\log \frac{\pi_\theta}{\pi_{\text{ref}}}$ 项天然地惩罚 $\pi_\theta$ 偏离 $\pi_{\text{ref}}$ 过远
 3. **防止退化**：若无参考策略，模型会通过无限提高 $y_w$ 的 log prob 或无限降低 $y_l$ 的 log prob 来将损失压低到 0，导致训练不稳定
 
 **与 PPO 的对比**：
@@ -360,7 +368,7 @@ DPO 训练中保留了一个冻结的参考策略 $\pi_\text{ref}$，通常是 S
 可以证明，DPO 损失的梯度等价于在以下约束下最大化期望奖励：
 
 $$
-D_{\mathrm{KL}}[\pi_\theta \| \pi_\text{ref}] \le \delta
+D_{\mathrm{KL}}[\pi_\theta \| \pi_{\text{ref}}] \le \delta
 $$
 
 其中约束强度由 $\beta$ 控制（$\beta$ 越小，KL 约束越松，策略变化越激进）。
@@ -370,7 +378,7 @@ $$
 ### 6.3 β 参数的直觉理解
 
 $$
-\hat{r}_\theta(x, y) = \beta \log \frac{\pi_\theta(y|x)}{\pi_\text{ref}(y|x)}
+\hat{r}_\theta(x, y) = \beta \log \frac{\pi_\theta(y|x)}{\pi_{\text{ref}}(y|x)}
 $$
 
 - **$\beta \to 0$**：隐式奖励趋于零，策略几乎不更新（过于保守）
@@ -448,8 +456,8 @@ reward_model = AutoModelForSequenceClassification.from_pretrained(...)  # r(x,y)
 | 维度 | PPO | DPO |
 |------|-----|-----|
 | **理论基础** | 策略梯度 + 重要性采样 + Clip 约束 | RLHF 最优策略的解析解 + Bradley-Terry 模型 |
-| **优化目标** | 最大化期望累计折扣回报 $J(\theta)$ | 最大化偏好对数据的对数似然 $-\mathcal{L}_\text{DPO}$ |
-| **KL 约束** | 显式：KL 惩罚加入每 token 奖励 | 隐式：嵌入损失函数的 $\log(\pi_\theta/\pi_\text{ref})$ 项 |
+| **优化目标** | 最大化期望累计折扣回报 $J(\theta)$ | 最大化偏好对数据的对数似然 $-\mathcal{L}_{\text{DPO}}$ |
+| **KL 约束** | 显式：KL 惩罚加入每 token 奖励 | 隐式：嵌入损失函数的 $\log(\pi_\theta/\pi_{\text{ref}})$ 项 |
 | **奖励信号** | 外部 Reward Model 显式打分 | 偏好数据隐式提供（chosen > rejected） |
 | **优势函数** | 需要 GAE 估计（Critic + TD Error） | 不需要（偏好信号直接替代） |
 | **核心公式** | $r_t(\theta) \cdot \nabla_\theta \log \pi_\theta(a_t\|s_t) \cdot \hat{A}_t$ | $\nabla_\theta \log \sigma(\hat{r}_\theta(y_w) - \hat{r}_\theta(y_l))$ |
@@ -560,10 +568,10 @@ Clip PPO 多轮更新                      一轮监督学习更新
 | 理论概念 | 在 DPO 中的体现 | 对应 PPO 中的概念 |
 |---------|--------------|----------------|
 | **Bradley-Terry 模型** | 偏好概率 $P(y_w \succ y_l) = \sigma(r_w - r_l)$ | PPO 无显式偏好概率（用累计回报代替） |
-| **RLHF 最优策略** | $\pi^*(y\|x) \propto \pi_\text{ref}(y\|x) e^{r(x,y)/\beta}$ | PPO 数值逼近, 无闭合解 |
+| **RLHF 最优策略** | $\pi^*(y\|x) \propto \pi_{\text{ref}}(y\|x) e^{r(x,y)/\beta}$ | PPO 数值逼近, 无闭合解 |
 | **配分函数消去** | $Z(x)$ 在 $r_w - r_l$ 中抵消，不需计算 | PPO 无此步骤 |
-| **隐式奖励** | $\hat{r}_\theta = \beta \log(\pi_\theta / \pi_\text{ref})$ | PPO：RM 显式输出的 $r(x,y)$ |
-| **KL 约束** | 隐式：$\log(\pi_\theta/\pi_\text{ref})$ 项自然约束 | PPO：显式 `kl_coef × KL` 加入奖励 |
+| **隐式奖励** | $\hat{r}_\theta = \beta \log(\pi_\theta / \pi_{\text{ref}})$ | PPO：RM 显式输出的 $r(x,y)$ |
+| **KL 约束** | 隐式：$\log(\pi_\theta/\pi_{\text{ref}})$ 项自然约束 | PPO：显式 `kl_coef × KL` 加入奖励 |
 | **参考策略** | 提供 log ratio 基准，防止策略退化 | PPO：Reference 仅用于计算 KL 惩罚 |
 | **$\beta$ 参数** | 控制 KL 约束强度（隐式） | PPO：`kl_coef` 控制 KL 约束（显式） |
 | **偏好监督信号** | chosen/rejected 对，离线数据集 | PPO：RM 在线打分 |
